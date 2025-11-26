@@ -8,7 +8,7 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.post(/(.*)/, (req, res) => {
   console.log(`\n=== POST RECEBIDO (${req.get('content-length')} bytes) ===`);
   // Cuidado ao logar o body inteiro se for um arquivo gigante, vai sujar seu log
-  // console.log('Body:', req.body); 
+  console.log('Body:', req.body); 
   
   res.status(200).json({ status: 'ok', size: req.get('content-length') });
 });
