@@ -1,61 +1,68 @@
 const express = require('express');
-const app = express();
-
-// Configuração atualizada para aceitar payloads grandes
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
-
 const fs = require('fs');
 const path = require('path');
 
-app.post(/(.*)/, (req, res) => {
-    // Pega o base64 (ajuste conforme a estrutura do seu JSON, ex: req.body.imagem)
-    const base64Data = JSON.stringify(req.body); 
+const app = express();
+const ARQUIVO_PATH = path.join('/tmp', 'arquivo_recebido.txt');
 
-    const filePath = path.join(__dirname, 'dump_completo.txt');
+// --- ROTA 1: POST (Recebe o arquivo gigante via Stream) ---
+// Aceita qualquer rota POST (ex: /, /webhook, /upload)
+app.post(/(.*)/, (req, res) => {
+    console.log(`\n>>> Iniciando recebimento de upload...`);
     
-    // Escreve o arquivo no disco do container
-    fs.writeFile(filePath, base64Data, (err) => {
-        if (err) {
-            console.error('Erro ao salvar:', err);
-            return res.status(500).send('Erro ao salvar');
-        }
-        console.log(`Arquivo salvo em: ${filePath} (${base64Data.length} bytes)`);
+    // Cria o fluxo de escrita direto para o disco
+    const writeStream = fs.createWriteStream(ARQUIVO_PATH);
+    
+    // Conecta a torneira da internet direto no arquivo
+    req.pipe(writeStream);
+
+    // Quando o fluxo terminar (arquivo salvo)
+    writeStream.on('finish', () => {
+        const stats = fs.statSync(ARQUIVO_PATH);
+        console.log(`>>> Arquivo salvo com sucesso! Tamanho: ${(stats.size / 1024 / 1024).toFixed(2)} MB`);
         
-        // Se quiser baixar esse arquivo depois via browser:
-        // res.download(filePath); 
-        res.send({ status: 'salvo', path: filePath });
+        res.status(200).json({
+            status: 'sucesso',
+            mensagem: 'Arquivo recebido e salvo no disco temporário.',
+            caminho: ARQUIVO_PATH,
+            tamanho_bytes: stats.size
+        });
+    });
+
+    // Se der erro no meio do caminho
+    writeStream.on('error', (err) => {
+        console.error('Erro na escrita do arquivo:', err);
+        res.status(500).send('Erro ao salvar arquivo.');
     });
 });
 
-// Rota para ver se o arquivo existe e qual o tamanho
-app.get('/status-arquivo', (req, res) => {
-    const filePath = '/tmp/recebido.json';
-    
-    if (fs.existsSync(filePath)) {
-        const stats = fs.statSync(filePath);
-        res.json({ 
-            existe: true, 
-            caminho: filePath, 
-            tamanho_bytes: stats.size,
-            tamanho_mb: (stats.size / 1024 / 1024).toFixed(2) + ' MB'
+// --- ROTA 2: GET /status (Verifica se o arquivo está lá) ---
+app.get('/status', (req, res) => {
+    if (fs.existsSync(ARQUIVO_PATH)) {
+        const stats = fs.statSync(ARQUIVO_PATH);
+        res.json({
+            existe: true,
+            tamanho: (stats.size / 1024 / 1024).toFixed(2) + ' MB',
+            caminho: ARQUIVO_PATH,
+            data_modificacao: stats.mtime
         });
     } else {
-        res.status(404).json({ existe: false, msg: 'Nenhum arquivo encontrado.' });
+        res.status(404).json({ existe: false, msg: 'Nenhum arquivo enviado ainda.' });
     }
 });
 
-// Rota para baixar o arquivo propriamente dito
+// --- ROTA 3: GET /baixar (Faz o download do arquivo para seu PC) ---
 app.get('/baixar', (req, res) => {
-    const filePath = '/tmp/recebido.json';
-    if (fs.existsSync(filePath)) {
-        res.download(filePath);
+    if (fs.existsSync(ARQUIVO_PATH)) {
+        res.download(ARQUIVO_PATH, 'download-teste.txt');
     } else {
-        res.status(404).send('Arquivo não encontrado.');
+        res.status(404).send('Arquivo não encontrado. Faça o POST primeiro.');
     }
 });
 
+// Inicia o servidor
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Servidor ouvindo na porta ${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Servidor Node v22 rodando na porta ${PORT}`);
+    console.log(`Pasta temporária: /tmp`);
 });
