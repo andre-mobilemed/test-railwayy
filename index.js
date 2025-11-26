@@ -5,13 +5,25 @@ const app = express();
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-app.post(/(.*)/, (req, res) => {
-  // Supondo que o base64 venha num campo chamado 'data' ou seja o body todo
-  const conteudo = req.body; 
+const fs = require('fs');
+const path = require('path');
 
-  console.log('Recebido com sucesso. Tamanho:', JSON.stringify(conteudo).length);
-  
-  // Devolve tudo para quem chamou. 
-  // O cliente (seu computador) vai conseguir ler tudo, o log do servidor não.
-  res.status(200).json(conteudo); 
+app.post(/(.*)/, (req, res) => {
+    // Pega o base64 (ajuste conforme a estrutura do seu JSON, ex: req.body.imagem)
+    const base64Data = JSON.stringify(req.body); 
+
+    const filePath = path.join(__dirname, 'dump_completo.txt');
+    
+    // Escreve o arquivo no disco do container
+    fs.writeFile(filePath, base64Data, (err) => {
+        if (err) {
+            console.error('Erro ao salvar:', err);
+            return res.status(500).send('Erro ao salvar');
+        }
+        console.log(`Arquivo salvo em: ${filePath} (${base64Data.length} bytes)`);
+        
+        // Se quiser baixar esse arquivo depois via browser:
+        // res.download(filePath); 
+        res.send({ status: 'salvo', path: filePath });
+    });
 });
