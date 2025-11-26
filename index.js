@@ -28,6 +28,33 @@ app.post(/(.*)/, (req, res) => {
     });
 });
 
+// Rota para ver se o arquivo existe e qual o tamanho
+app.get('/status-arquivo', (req, res) => {
+    const filePath = '/tmp/recebido.json';
+    
+    if (fs.existsSync(filePath)) {
+        const stats = fs.statSync(filePath);
+        res.json({ 
+            existe: true, 
+            caminho: filePath, 
+            tamanho_bytes: stats.size,
+            tamanho_mb: (stats.size / 1024 / 1024).toFixed(2) + ' MB'
+        });
+    } else {
+        res.status(404).json({ existe: false, msg: 'Nenhum arquivo encontrado.' });
+    }
+});
+
+// Rota para baixar o arquivo propriamente dito
+app.get('/baixar', (req, res) => {
+    const filePath = '/tmp/recebido.json';
+    if (fs.existsSync(filePath)) {
+        res.download(filePath);
+    } else {
+        res.status(404).send('Arquivo não encontrado.');
+    }
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Servidor ouvindo na porta ${PORT}`);
